@@ -8,6 +8,8 @@ backend/venv/
 
 # Environment variables
 .env
+.env.local
+backend/.env.local
 
 # IDE
 .vscode/
@@ -15,3 +17,7 @@ backend/venv/
 # Node
 frontend/node_modules/
 frontend/.next/
+
+
+backend/credentials.json
+backend/token.json
