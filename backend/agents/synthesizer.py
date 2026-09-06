@@ -49,6 +49,7 @@ def synthesize_answer(user_query: str, chunks: list[dict], run_id: str = None, a
     except (json.JSONDecodeError, AttributeError):
         answer = raw_output
         cited_chunk_ids = []
+    print(f"[Synthesizer] Generated answer (retry feedback used: {critic_feedback is not None})")
 
     if run_id and attempt_id:
         from utils.token_logger import log_tokens
