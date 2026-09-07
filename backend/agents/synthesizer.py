@@ -21,12 +21,17 @@ Respond ONLY with valid JSON in this exact format, no other text:
 {"answer": "your answer text with [chunk_id] citations inline", "cited_chunk_ids": ["id1", "id2"]}
 """
 
-def synthesize_answer(user_query: str, chunks: list[dict], run_id: str = None, attempt_id: str = None, critic_feedback: str = None) -> dict:
+def synthesize_answer(user_query: str, chunks: list[dict], memories: list[dict] = None, run_id: str = None, attempt_id: str = None, critic_feedback: str = None) -> dict:
     context_block = "\n\n".join(
         f"chunk_id: {c['chunk_id']}\ncontent: {c['content']}" for c in chunks
     )
 
-    user_message = f"Question: {user_query}\n\nRetrieved chunks:\n{context_block}"
+    memory_block = ""
+    if memories:
+        memory_lines = "\n".join(f"- {m['summary']}" for m in memories)
+        memory_block = f"\n\nKnown facts from prior conversations (context only, not citable sources):\n{memory_lines}"
+
+    user_message = f"Question: {user_query}{memory_block}\n\nRetrieved chunks:\n{context_block}"
     if critic_feedback:
         user_message += f"\n\nNote: a previous answer attempt was rejected for this reason — address it: {critic_feedback}"
 

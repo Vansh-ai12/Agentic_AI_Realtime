@@ -24,3 +24,6 @@ print("Citations verified:", final_state["citations_verified"])
 print("Verdict:", final_state["verdict"])
 print("Critic reason:", final_state["critic_reason"])
 print("Retry count:", final_state["retry_count"])
+print("Memory write result:", final_state.get("memory_write_result"))
+
+print("Memories used:", final_state.get("memories"))
