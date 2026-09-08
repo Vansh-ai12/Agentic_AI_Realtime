@@ -21,10 +21,31 @@ Respond ONLY with valid JSON in this exact format, no other text:
 {"answer": "your answer text with [chunk_id] citations inline", "cited_chunk_ids": ["id1", "id2"]}
 """
 
-def synthesize_answer(user_query: str, chunks: list[dict], memories: list[dict] = None, run_id: str = None, attempt_id: str = None, critic_feedback: str = None) -> dict:
-    context_block = "\n\n".join(
-        f"chunk_id: {c['chunk_id']}\ncontent: {c['content']}" for c in chunks
-    )
+
+def _build_context_block(chunks: list[dict], previously_cited_ids: list[str] = None) -> str:
+    previously_cited_ids = previously_cited_ids or []
+    parts = []
+    for c in chunks:
+        if c["chunk_id"] in previously_cited_ids:
+            parts.append(f"chunk_id: {c['chunk_id']}\n(already used in previous attempt — content omitted to save tokens)")
+        else:
+            parts.append(f"chunk_id: {c['chunk_id']}\ncontent: {c['content']}")
+    return "\n\n".join(parts)
+
+
+def synthesize_answer(
+    user_query: str,
+    chunks: list[dict],
+    memories: list[dict] = None,
+    run_id: str = None,
+    attempt_id: str = None,
+    critic_feedback: str = None,
+    previous_answer: str = None,
+    previous_cited_ids: list[str] = None
+) -> dict:
+    is_retry = critic_feedback is not None
+
+    context_block = _build_context_block(chunks, previous_cited_ids if is_retry else None)
 
     memory_block = ""
     if memories:
@@ -32,8 +53,12 @@ def synthesize_answer(user_query: str, chunks: list[dict], memories: list[dict] 
         memory_block = f"\n\nKnown facts from prior conversations (context only, not citable sources):\n{memory_lines}"
 
     user_message = f"Question: {user_query}{memory_block}\n\nRetrieved chunks:\n{context_block}"
-    if critic_feedback:
-        user_message += f"\n\nNote: a previous answer attempt was rejected for this reason — address it: {critic_feedback}"
+
+    if is_retry:
+        user_message += (
+            f"\n\nYour previous answer was: {previous_answer}"
+            f"\n\nIt was rejected for this reason — revise it to address this specifically: {critic_feedback}"
+        )
 
     response = client.chat.completions.create(
         model=SYNTHESIZER_MODEL,
@@ -54,7 +79,8 @@ def synthesize_answer(user_query: str, chunks: list[dict], memories: list[dict] 
     except (json.JSONDecodeError, AttributeError):
         answer = raw_output
         cited_chunk_ids = []
-    print(f"[Synthesizer] Generated answer (retry feedback used: {critic_feedback is not None})")
+
+    print(f"[Synthesizer] Generated answer (retry: {is_retry}, tokens_in: {usage.prompt_tokens})")
 
     if run_id and attempt_id:
         from utils.token_logger import log_tokens
