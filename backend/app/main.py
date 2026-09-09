@@ -1,6 +1,11 @@
 from fastapi import FastAPI
 
+from routes import trace
+
 app = FastAPI()
+
+
+app.include_router(trace.router, prefix="/api")
 
 
 @app.get("/")
