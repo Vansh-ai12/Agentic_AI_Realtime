@@ -8,6 +8,7 @@ from agents.citation_verifier import verify_all_citations
 from agents.critic import critique_answer
 from memory.long_term import write_memory, read_relevant_memories
 from trackings.trace_logger import log_trace_event
+from utils.run_manager import update_run_status
 
 MAX_RETRIES = 3
 
@@ -146,6 +147,14 @@ def unresolved_node(state: PipelineState) -> PipelineState:
     state["verdict"] = "unresolved"
     state["critic_reason"] = f"Failed to produce an approved answer after {state['retry_count']} attempts. Last reason: {state.get('critic_reason', 'unknown')}"
 
+    update_run_status(
+        run_id=state.get("run_id"),
+        status="unresolved",
+        total_attempts=state.get("retry_count", 0),
+        total_tokens=0
+    )
+
+
     log_trace_event(
         run_id=state.get("run_id"), attempt_id=state.get("attempt_id"),
         node_name="unresolved",
@@ -164,6 +173,13 @@ def memory_writer_node(state: PipelineState) -> PipelineState:
         source_run_id=state.get("run_id")
     )
     state["memory_write_result"] = result
+
+    update_run_status(
+        run_id=state.get("run_id"),
+        status="resolved",
+        total_attempts=state.get("retry_count", 0) + 1,
+        total_tokens=0  # optional — can wire this up properly later if you want a real total
+    )
 
     log_trace_event(
         run_id=state.get("run_id"), attempt_id=state.get("attempt_id"),

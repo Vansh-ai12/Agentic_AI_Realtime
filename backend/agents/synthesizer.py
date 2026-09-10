@@ -19,6 +19,7 @@ If the chunks don't contain enough information to answer the question, say so ho
 
 Respond ONLY with valid JSON in this exact format, no other text:
 {"answer": "your answer text with [chunk_id] citations inline", "cited_chunk_ids": ["id1", "id2"]}
+if someone asks about Maths answer them :- "Sorry I cant answer your question as I am not trained in Maths, please ask another question."
 """
 
 
