@@ -19,6 +19,10 @@ initial_state = {
     "run_id": run_id,
     "attempt_id": attempt_id,
     "retry_count": 0,
+    "input_guard_result": None,
+    "chunk_guard_result": None,
+    "blocked_reason": None,
+    "output_guardrail_result": None,
 }
 
 print("Invoking pipeline...")
