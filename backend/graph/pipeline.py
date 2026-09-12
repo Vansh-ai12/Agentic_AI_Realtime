@@ -142,9 +142,10 @@ def blocked_node(state: PipelineState) -> PipelineState:
     
     print(f"[Blocked] {state['blocked_reason']}")
 
+    # Use "unresolved" status instead of "blocked" to avoid database constraint violation
     update_run_status(
         run_id=state.get("run_id"),
-        status="blocked",
+        status="unresolved",
         total_attempts=0,
         total_tokens=0
     )

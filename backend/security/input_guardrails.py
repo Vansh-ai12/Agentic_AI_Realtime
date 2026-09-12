@@ -51,7 +51,8 @@ INJECTION_PATTERNS = [
     r'from\s+now\s+on\s+you\s+are',
     r'convert\s+yourself\s+into',
     r'transform\s+into',
-    r'become\s+\w+',
+    r'become\s+(?:a\s+)?(?:hacker|admin|root|god|supervisor|moderator|unrestricted)',
+    r'become\s+(?:an?\s+)?assistant\s+(?:with\s+no\s+restrictions|without\s+restrictions)',
     r'assistant\s*:\s*ignore',
     r'system\s*:\s*ignore',
     r'developer\s*:\s*ignore',
@@ -113,6 +114,10 @@ def layer2_classifier_check(text: str) -> Optional[Dict[str, str]]:
     This is the primary defense layer.
     Returns None if clean, or detection info if flagged.
     Fails closed: if any error occurs, returns a flag.
+    
+    The classifier returns a numeric confidence score (0.0 to 1.0):
+    - High scores (close to 1.0) indicate malicious content
+    - Low scores (close to 0.0) indicate benign content
     """
     if not text or not isinstance(text, str):
         return {"layer": "classifier", "flagged": True, "reason": "Invalid input type"}
@@ -127,24 +132,39 @@ def layer2_classifier_check(text: str) -> Optional[Dict[str, str]]:
             max_tokens=64
         )
         
-        result = response.choices[0].message.content.strip().lower()
+        result = response.choices[0].message.content.strip()
         
-        # The model should output "benign" or "malicious"
-        if "malicious" in result:
-            return {
-                "layer": "classifier",
-                "flagged": True,
-                "reason": f"Classifier detected malicious content: {result}"
-            }
-        elif "benign" in result:
-            return None  # Clean
-        else:
-            # Unexpected output - fail closed
-            return {
-                "layer": "classifier",
-                "flagged": True,
-                "reason": f"Unexpected classifier output: {result}"
-            }
+        # The classifier returns a numeric confidence score
+        try:
+            score = float(result)
+            # High score indicates malicious (threshold can be adjusted)
+            MALICIOUS_THRESHOLD = 0.5
+            if score >= MALICIOUS_THRESHOLD:
+                return {
+                    "layer": "classifier",
+                    "flagged": True,
+                    "reason": f"Classifier detected malicious content (score: {score:.4f})"
+                }
+            else:
+                return None  # Clean
+        except ValueError:
+            # If output is not numeric, try to parse as text labels
+            result_lower = result.lower()
+            if "malicious" in result_lower or any(keyword in result_lower for keyword in ["injection", "jailbreak", "attack"]):
+                return {
+                    "layer": "classifier",
+                    "flagged": True,
+                    "reason": f"Classifier detected malicious content: {result}"
+                }
+            elif "benign" in result_lower:
+                return None  # Clean
+            else:
+                # Unexpected output - fail closed
+                return {
+                    "layer": "classifier",
+                    "flagged": True,
+                    "reason": f"Unexpected classifier output: {result}"
+                }
             
     except Exception as e:
         # Fail closed on any error

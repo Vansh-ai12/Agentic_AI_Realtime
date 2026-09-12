@@ -39,7 +39,7 @@ def write_memory(user_id: str, user_query: str, answer: str, source_run_id: str 
     )
 
     raw_output = response.choices[0].message.content
-    print(f"[Memory Writer] Raw LLM output: {raw_output!r}")
+    print(f"[Memory Writer] Raw LLM output: {raw_output[:100]}...")
 
     try:
         parsed = json.loads(raw_output)
