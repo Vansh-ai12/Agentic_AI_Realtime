@@ -56,7 +56,7 @@ def critique_answer(user_query: str, answer: str, citations_verified: bool, run_
     if not citations_verified and verdict == "approve":
         verdict = "reject"
         reason = f"Overridden: citations were not verified as supported. Original critic reasoning: {reason}"
-    print(f"[Critic] Verdict: {verdict} — {reason}")
+    print(f"[Critic] Verdict: {verdict} - {reason}")
 
     if run_id and attempt_id:
         from utils.token_logger import log_tokens
