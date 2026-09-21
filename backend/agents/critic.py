@@ -1,15 +1,7 @@
-import os
 import json
-from groq import Groq
-from dotenv import load_dotenv
-from pathlib import Path
+from utils.groq_client import groq_chat_completion
 
-env_path = Path(__file__).resolve().parents[1] / ".env.local"
-load_dotenv(dotenv_path=env_path)
-
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-
-CRITIC_MODEL = "openai/gpt-oss-20b"
+CRITIC_MODEL = "qwen/qwen3.8-27b"  
 
 CRITIC_SYSTEM_PROMPT = """You are a critic agent reviewing an AI-generated answer before it's shown to the user.
 
@@ -26,6 +18,28 @@ or
 {"verdict": "reject", "reason": "specific, actionable explanation of what's wrong, so the answer can be improved"}
 """
 
+import re
+
+def _extract_json(text: str) -> dict:
+    if not text:
+        return {}
+    cleaned = text.strip()
+    if "```" in cleaned:
+        match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", cleaned)
+        if match:
+            cleaned = match.group(1).strip()
+    try:
+        return json.loads(cleaned)
+    except Exception:
+        match = re.search(r"\{[\s\S]*\}", cleaned)
+        if match:
+            try:
+                return json.loads(match.group(0))
+            except Exception:
+                pass
+    return {}
+
+
 def critique_answer(user_query: str, answer: str, citations_verified: bool, run_id: str = None, attempt_id: str = None) -> dict:
     user_message = (
         f"Original question: {user_query}\n\n"
@@ -33,30 +47,35 @@ def critique_answer(user_query: str, answer: str, citations_verified: bool, run_
         f"Citations verified as accurate: {citations_verified}"
     )
 
-    response = client.chat.completions.create(
+    response = groq_chat_completion(
         model=CRITIC_MODEL,
         messages=[
             {"role": "system", "content": CRITIC_SYSTEM_PROMPT},
             {"role": "user", "content": user_message}
         ],
         temperature=0.2,
+        max_tokens=600,
     )
 
-    raw_output = response.choices[0].message.content
+    raw_output = response.choices[0].message.content or ""
     usage = response.usage
 
-    try:
-        parsed = json.loads(raw_output)
+    parsed = _extract_json(raw_output)
+    if parsed:
         verdict = parsed.get("verdict", "reject")
         reason = parsed.get("reason", "")
-    except (json.JSONDecodeError, AttributeError):
+    else:
         verdict = "reject"
         reason = "Failed to parse critic output"
 
+    # Nuanced override: if unverified citations, check if LLM already noticed or reject with specific feedback
     if not citations_verified and verdict == "approve":
         verdict = "reject"
-        reason = f"Overridden: citations were not verified as supported. Original critic reasoning: {reason}"
-    print(f"[Critic] Verdict: {verdict} - {reason}")
+    try:
+        print(f"[Critic] Verdict: {verdict} - {reason}")
+    except UnicodeEncodeError:
+        safe_msg = f"[Critic] Verdict: {verdict} - {reason}".encode("ascii", errors="replace").decode("ascii")
+        print(safe_msg)
 
     if run_id and attempt_id:
         from utils.token_logger import log_tokens

@@ -1,15 +1,7 @@
-import os
 import json
-from groq import Groq
-from dotenv import load_dotenv
-from pathlib import Path
+from utils.groq_client import groq_chat_completion
 from db.supabase_client import supabase
 from rag.embeddings import get_embedding
-
-env_path = Path(__file__).resolve().parents[1] / ".env.local"
-load_dotenv(dotenv_path=env_path)
-
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 MEMORY_SUMMARY_MODEL = "openai/gpt-oss-20b"
 DEDUP_THRESHOLD = 0.85
@@ -29,13 +21,14 @@ Respond ONLY with valid JSON in this exact format, no other text:
 
 
 def write_memory(user_id: str, user_query: str, answer: str, source_run_id: str = None) -> dict:
-    response = client.chat.completions.create(
+    response = groq_chat_completion(
         model=MEMORY_SUMMARY_MODEL,
         messages=[
             {"role": "system", "content": MEMORY_SUMMARY_PROMPT},
             {"role": "user", "content": f"Question: {user_query}\n\nAnswer: {answer}"}
         ],
         temperature=0.1,
+        max_tokens=150,
     )
 
     raw_output = response.choices[0].message.content

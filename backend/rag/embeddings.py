@@ -1,9 +1,15 @@
 import hashlib
 import ast
-from sentence_transformers import SentenceTransformer
 from db.supabase_client import supabase
 
-_model = SentenceTransformer("all-MiniLM-L6-v2")
+_model = None
+
+def _get_model():
+    global _model
+    if _model is None:
+        from sentence_transformers import SentenceTransformer
+        _model = SentenceTransformer("all-MiniLM-L6-v2")
+    return _model
 
 def _hash_content(text: str) -> str:
     normalized = " ".join(text.split()).lower()
@@ -21,7 +27,8 @@ def get_embedding(text: str) -> list[float]:
             return ast.literal_eval(raw)  # parse "[-0.02,0.006,...]" into a real list
         return raw  # already a list, return as-is
 
-    embedding = _model.encode(text).tolist()
+    model = _get_model()
+    embedding = model.encode(text).tolist()
 
     supabase.table("embedding_cache").insert({
         "content_hash": content_hash,

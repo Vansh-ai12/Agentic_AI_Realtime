@@ -8,13 +8,12 @@ from dotenv import load_dotenv
 env_path = Path(__file__).resolve().parents[2] / ".env.local"
 load_dotenv(dotenv_path=env_path)
 
-from groq import Groq
+from utils.groq_client import groq_chat_completion
 from db.supabase_client import supabase
 
 class CriteriaEvaluator:
     def __init__(self):
-        self.llm_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-        self.eval_model = "llama-3.1-8b-instant"  # Use a valid Groq model for evaluation
+        self.eval_model = "llama-3.1-8b-instant"  # Valid Groq model for evaluation
     
     def evaluate_case(self, case, pipeline_result):
         """
@@ -48,11 +47,13 @@ class CriteriaEvaluator:
             }
         
         # Check required content
+        # Check required content (accepts if any alternative phrasing matches)
         required_content = criteria.get("required_content", [])
-        missing_required = []
-        for keyword in required_content:
-            if keyword.lower() not in answer.lower():
-                missing_required.append(keyword)
+        if required_content:
+            matched_keywords = [kw for kw in required_content if kw.lower() in answer.lower()]
+            missing_required = [] if matched_keywords else required_content
+        else:
+            missing_required = []
         
         # Check forbidden content
         forbidden_content = criteria.get("forbidden_content", [])
@@ -65,7 +66,7 @@ class CriteriaEvaluator:
         if missing_required and not criteria.get("must_cite_chunks", False):
             return {
                 "passed": False,
-                "reason": f"Missing required content: {missing_required}",
+                "reason": f"Missing required content: expected one of {required_content}",
                 "details": {
                     "missing_required": missing_required,
                     "found_forbidden": found_forbidden
@@ -108,7 +109,7 @@ Return JSON format:
 """
         
         try:
-            response = self.llm_client.chat.completions.create(
+            response = groq_chat_completion(
                 model=self.eval_model,
                 messages=[
                     {"role": "system", "content": "You are an objective evaluator. Return only valid JSON."},

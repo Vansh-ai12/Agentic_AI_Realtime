@@ -54,9 +54,17 @@ export function MetricCard({
 
   return (
     <div
-      className={`relative overflow-hidden border rounded-xl p-4 shadow-sm backdrop-blur-sm transition-all duration-150 ${variantStyles.card} ${className}`}
+      className={`relative overflow-hidden border rounded-xl p-4 shadow-sm backdrop-blur-sm transition-all duration-150 hover-lift group ${variantStyles.card} ${className}`}
     >
-      <div className="flex items-center justify-between gap-2">
+      {/* Subtle glow effect */}
+      <div className={`absolute inset-0 opacity-0 transition-opacity duration-300 pointer-events-none group-hover:opacity-100 ${
+        variant === 'emerald' ? 'bg-emerald-500/5' :
+        variant === 'rose' ? 'bg-rose-500/5' :
+        variant === 'indigo' ? 'bg-indigo-500/5' :
+        variant === 'amber' ? 'bg-amber-500/5' : 'bg-slate-500/5'
+      }`} />
+      
+      <div className="relative flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5">
           <span className={`text-[11px] font-mono uppercase tracking-wider ${variantStyles.label}`}>
             {label}
@@ -79,12 +87,12 @@ export function MetricCard({
         )}
       </div>
 
-      <div className={`text-2xl sm:text-3xl font-bold font-mono mt-1.5 tracking-tight ${variantStyles.value}`}>
+      <div className={`relative text-2xl sm:text-3xl font-bold font-mono mt-1.5 tracking-tight ${variantStyles.value}`}>
         {value}
       </div>
 
       {sublabel && (
-        <div className="text-[11px] text-slate-500 mt-1 font-mono">
+        <div className="relative text-[11px] text-slate-500 mt-1 font-mono">
           {sublabel}
         </div>
       )}

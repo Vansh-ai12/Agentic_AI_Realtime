@@ -9,6 +9,8 @@ export function Navbar() {
   const isHome = pathname === "/";
   const isRuns = pathname.startsWith("/runs");
   const isTrace = pathname.startsWith("/trace");
+  const isEval = pathname.startsWith("/eval");
+  const isConnect = pathname.startsWith("/connect");
 
   return (
     <header className="border-b border-slate-800/80 bg-[#090d16]/80 backdrop-blur-xl sticky top-0 z-50">
@@ -62,6 +64,26 @@ export function Navbar() {
               }`}
             >
               Runs Directory
+            </Link>
+            <Link
+              href="/eval"
+              className={`px-3 py-1.5 rounded-md transition-all font-mono text-[11px] ${
+                isEval
+                  ? "bg-indigo-600/20 text-indigo-300 border border-indigo-500/30"
+                  : "text-slate-400 hover:text-white hover:bg-slate-800/60"
+              }`}
+            >
+              Eval
+            </Link>
+            <Link
+              href="/connect/gmail"
+              className={`px-3 py-1.5 rounded-md transition-all font-mono text-[11px] ${
+                isConnect
+                  ? "bg-indigo-600/20 text-indigo-300 border border-indigo-500/30"
+                  : "text-slate-400 hover:text-white hover:bg-slate-800/60"
+              }`}
+            >
+              Connect
             </Link>
             {isTrace && (
               <span className="px-3 py-1.5 rounded-md text-[11px] font-mono bg-slate-800/50 text-slate-300 border border-slate-700/60 flex items-center gap-1.5">

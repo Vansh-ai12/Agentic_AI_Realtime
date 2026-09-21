@@ -67,10 +67,13 @@ interface TraceData {
 /* ─── Pipeline topology ──────────────────────────────────────────────── */
 const PIPELINE_NODES = [
   "memory_reader",
+  "input_guard",
   "planner",
   "retriever",
+  "chunk_guard",
   "synthesizer",
   "citation_verifier",
+  "output_guardrail",
   "critic",
 ] as const;
 
@@ -79,13 +82,17 @@ const NODE_META: Record<
   { label: string; icon: string; category: "utility" | "llm" | "gate" | "terminal" }
 > = {
   memory_reader:     { label: "Memory Reader",     icon: "🧠", category: "utility" },
+  input_guard:       { label: "Input Guard",       icon: "🛡️", category: "gate" },
   planner:           { label: "Planner",           icon: "🧭", category: "llm" },
   retriever:         { label: "Retriever",         icon: "🔍", category: "utility" },
+  chunk_guard:       { label: "Chunk Guard",       icon: "🧹", category: "gate" },
   synthesizer:       { label: "Synthesizer",       icon: "⚡", category: "llm" },
   citation_verifier: { label: "Citation Verifier", icon: "📑", category: "gate" },
+  output_guardrail:  { label: "Output Guard",      icon: "🔒", category: "gate" },
   critic:            { label: "Critic",            icon: "⚖️", category: "gate" },
   write_memory:      { label: "Write Memory",      icon: "💾", category: "terminal" },
   unresolved:        { label: "Unresolved",        icon: "🚫", category: "terminal" },
+  blocked:           { label: "Blocked",           icon: "⛔", category: "terminal" },
 };
 
 function formatMs(ms: number): string {
@@ -107,10 +114,10 @@ function DagView({ events, status }: { events: TraceEvent[]; status: string }) {
     nodeCounts[e.node_name] = (nodeCounts[e.node_name] ?? 0) + 1;
   }
 
-  const nodeW = 145;
+  const nodeW = 118;
   const nodeH = 50;
-  const gapX = 36;
-  const startX = 24;
+  const gapX = 22;
+  const startX = 16;
   const topY = 48;
   const botY = 160;
 
@@ -122,6 +129,10 @@ function DagView({ events, status }: { events: TraceEvent[]; status: string }) {
   const criticPos = positions["critic"];
   positions["write_memory"] = { x: criticPos.x - 90, y: botY };
   positions["unresolved"] = { x: criticPos.x + 90, y: botY };
+  const guardPos = positions["input_guard"];
+  if (guardPos) {
+    positions["blocked"] = { x: guardPos.x, y: botY };
+  }
 
   const svgW = startX * 2 + PIPELINE_NODES.length * (nodeW + gapX);
   const svgH = botY + nodeH + 36;
@@ -143,13 +154,13 @@ function DagView({ events, status }: { events: TraceEvent[]; status: string }) {
       };
     }
 
-    if (name === "unresolved") {
+    if (name === "unresolved" || name === "blocked") {
       return {
         fill: "#260b13",
         stroke: "#f43f5e",
         text: "#fecdd3",
         subtext: "#fb7185",
-        badge: { bg: "#881337", text: "#ffe4e6", label: "Failed" },
+        badge: { bg: "#881337", text: "#ffe4e6", label: name === "blocked" ? "Blocked" : "Failed" },
       };
     }
 
@@ -259,12 +270,22 @@ function DagView({ events, status }: { events: TraceEvent[]; status: string }) {
             <path
               d={`M ${criticPos.x + nodeW / 2 + 20} ${criticPos.y + nodeH} C ${criticPos.x + nodeW / 2 + 20} ${botY - 20}, ${positions["unresolved"].x + nodeW / 2} ${botY - 25}, ${positions["unresolved"].x + nodeW / 2} ${botY - 2}`}
               fill="none"
-              stroke={status === "unresolved" ? "#f43f5e" : "#334155"}
-              strokeWidth={status === "unresolved" ? 2.5 : 1}
-              strokeDasharray={status === "unresolved" ? undefined : "4 3"}
-              markerEnd={status === "unresolved" ? "url(#arrow-rose)" : "url(#arrow)"}
+              stroke={(nodeCounts["unresolved"] ?? 0) > 0 ? "#f43f5e" : "#334155"}
+              strokeWidth={(nodeCounts["unresolved"] ?? 0) > 0 ? 2.5 : 1}
+              strokeDasharray={(nodeCounts["unresolved"] ?? 0) > 0 ? undefined : "4 3"}
+              markerEnd={(nodeCounts["unresolved"] ?? 0) > 0 ? "url(#arrow-rose)" : "url(#arrow)"}
             />
           </>
+        )}
+        {positions["input_guard"] && positions["blocked"] && (
+          <path
+            d={`M ${positions["input_guard"].x + nodeW / 2} ${positions["input_guard"].y + nodeH} C ${positions["input_guard"].x + nodeW / 2} ${botY - 20}, ${positions["blocked"].x + nodeW / 2} ${botY - 25}, ${positions["blocked"].x + nodeW / 2} ${botY - 2}`}
+            fill="none"
+            stroke={(nodeCounts["blocked"] ?? 0) > 0 ? "#f43f5e" : "#334155"}
+            strokeWidth={(nodeCounts["blocked"] ?? 0) > 0 ? 2.5 : 1}
+            strokeDasharray={(nodeCounts["blocked"] ?? 0) > 0 ? undefined : "4 3"}
+            markerEnd={(nodeCounts["blocked"] ?? 0) > 0 ? "url(#arrow-rose)" : "url(#arrow)"}
+          />
         )}
 
         {/* Retry Loop Arc: critic → synthesizer */}
@@ -311,7 +332,7 @@ function DagView({ events, status }: { events: TraceEvent[]; status: string }) {
         })()}
 
         {/* Render Node Cards */}
-        {[...PIPELINE_NODES, "write_memory", "unresolved"].map((name) => {
+        {[...PIPELINE_NODES, "write_memory", "unresolved", "blocked"].map((name) => {
           const pos = positions[name];
           if (!pos) return null;
           const style = getNodeStyle(name);
@@ -839,7 +860,14 @@ export default function TracePage() {
           subtitle="Chronological trace_events telemetry with payload inspection"
         />
         <div className="p-6">
-          <ExecutionFlowTimeline events={events} />
+          {events.length === 0 ? (
+            <EmptyState
+              title="No Trace Events"
+              message="This run exists in agent_runs but has no rows in trace_events."
+            />
+          ) : (
+            <ExecutionFlowTimeline events={events} />
+          )}
         </div>
       </Card>
 

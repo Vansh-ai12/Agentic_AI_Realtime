@@ -3,7 +3,7 @@ import Link from "next/link";
 
 interface ButtonProps {
   children: React.ReactNode;
-  variant?: "primary" | "secondary" | "ghost";
+  variant?: "primary" | "secondary" | "ghost" | "danger";
   size?: "sm" | "md";
   href?: string;
   onClick?: () => void;
@@ -37,6 +37,8 @@ export function Button({
       "bg-slate-900/80 hover:bg-slate-800 text-slate-200 border border-slate-700/80 shadow-sm active:scale-[0.98]",
     ghost:
       "text-slate-400 hover:text-white hover:bg-slate-800/60 active:scale-[0.98]",
+    danger:
+      "bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/25 active:scale-[0.98]",
   }[variant];
 
   const disabledClasses = disabled

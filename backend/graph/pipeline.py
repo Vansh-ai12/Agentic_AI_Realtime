@@ -8,15 +8,15 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 from agents.planner import plan_query
 from agents.retrieval_orchestrator import retrieve_for_all_subquestions
 from agents.synthesizer import synthesize_answer
-from agents.citation_verifier import verify_all_citations
+from agents.citation_verifier import verify_all_citations_batch
 from agents.critic import critique_answer
 from memory.long_term import write_memory, read_relevant_memories
 from trackings.trace_logger import log_trace_event
-from utils.run_manager import update_run_status
-from security.input_guardrails import check_for_injection, check_chunks_for_injection
+from utils.run_manager import update_run_status, create_attempt, update_attempt
+from security.input_guardrails import check_for_injection, check_chunks_for_injection_batch
 from security.output_guardrails import apply_output_guardrails
 
-MAX_RETRIES = 3
+MAX_RETRIES = 2
 
 class PipelineState(TypedDict):
     user_id: str
@@ -27,6 +27,7 @@ class PipelineState(TypedDict):
     chunks: Optional[list]
     memories: Optional[list]
     answer: Optional[str]
+    citations: Optional[list]
     cited_chunk_ids: Optional[list]
     citations_verified: Optional[bool]
     verdict: Optional[str]
@@ -81,6 +82,9 @@ def planner_node(state: PipelineState) -> PipelineState:
     result = plan_query(state["original_query"], state.get("run_id"), state.get("attempt_id"))
     state["sub_questions"] = result["sub_questions"]
 
+    if state.get("attempt_id"):
+        update_attempt(state["attempt_id"], planner_subquestions=result["sub_questions"])
+
     log_trace_event(
         run_id=state.get("run_id"), attempt_id=state.get("attempt_id"),
         node_name="planner",
@@ -110,7 +114,7 @@ def retriever_node(state: PipelineState) -> PipelineState:
 def chunk_guard_node(state: PipelineState) -> PipelineState:
     start = time.time()
     chunks = state.get("chunks", [])
-    result = check_chunks_for_injection(chunks)
+    result = check_chunks_for_injection_batch(chunks)
     state["chunk_guard_result"] = result
     
     # Filter out poisoned chunks
@@ -162,6 +166,13 @@ def blocked_node(state: PipelineState) -> PipelineState:
 def synthesizer_node(state: PipelineState) -> PipelineState:
     start = time.time()
     critic_feedback = state.get("critic_reason") if state.get("verdict") == "reject" else None
+    
+    # Create a new agent_attempts row on each retry so attempt granularity matches trace_events
+    if critic_feedback and state.get("run_id"):
+        new_attempt_number = state.get("retry_count", 0) + 2
+        new_attempt_id = create_attempt(state["run_id"], attempt_number=new_attempt_number)
+        state["attempt_id"] = new_attempt_id
+
     result = synthesize_answer(
         state["original_query"],
         state["chunks"],
@@ -173,8 +184,12 @@ def synthesizer_node(state: PipelineState) -> PipelineState:
         previous_cited_ids=state.get("cited_chunk_ids")
     )
     state["answer"] = result["answer"]
+    state["citations"] = result.get("citations", [])
     state["cited_chunk_ids"] = result["cited_chunk_ids"]
     state["retry_count"] = state.get("retry_count", 0) + (1 if critic_feedback else 0)
+
+    if state.get("attempt_id"):
+        update_attempt(state["attempt_id"], synthesizer_answer=result["answer"])
 
     log_trace_event(
         run_id=state.get("run_id"), attempt_id=state.get("attempt_id"),
@@ -189,14 +204,18 @@ def synthesizer_node(state: PipelineState) -> PipelineState:
 
 def citation_verifier_node(state: PipelineState) -> PipelineState:
     start = time.time()
-    synth_result = {"answer": state["answer"], "cited_chunk_ids": state["cited_chunk_ids"]}
-    verification = verify_all_citations(synth_result, state["chunks"], state.get("run_id"), state.get("attempt_id"))
+    synth_result = {
+        "answer": state["answer"],
+        "citations": state.get("citations", []),
+        "cited_chunk_ids": state["cited_chunk_ids"]
+    }
+    verification = verify_all_citations_batch(synth_result, state["chunks"], state.get("run_id"), state.get("attempt_id"))
     state["citations_verified"] = verification["all_supported"]
 
     log_trace_event(
         run_id=state.get("run_id"), attempt_id=state.get("attempt_id"),
         node_name="citation_verifier",
-        input_data={"cited_chunk_ids": state["cited_chunk_ids"]},
+        input_data={"cited_chunk_ids": state["cited_chunk_ids"], "citations": state.get("citations", [])},
         output_data={"all_supported": verification["all_supported"]},
         latency_ms=int((time.time() - start) * 1000)
     )
@@ -241,12 +260,22 @@ def critic_node(state: PipelineState) -> PipelineState:
     state["verdict"] = result["verdict"]
     state["critic_reason"] = result["reason"]
 
+    tokens = result.get("tokens_in", 0) + result.get("tokens_out", 0)
+    if state.get("attempt_id"):
+        update_attempt(
+            state["attempt_id"],
+            critic_verdict=result["verdict"],
+            critic_reason=result["reason"],
+            tokens_used=tokens,
+            latency_ms=int((time.time() - start) * 1000)
+        )
+
     log_trace_event(
         run_id=state.get("run_id"), attempt_id=state.get("attempt_id"),
         node_name="critic",
         input_data={"answer": state["answer"], "citations_verified": state["citations_verified"]},
         output_data={"verdict": result["verdict"], "reason": result["reason"]},
-        tokens_used=result.get("tokens_in", 0) + result.get("tokens_out", 0),
+        tokens_used=tokens,
         latency_ms=int((time.time() - start) * 1000)
     )
     return state
@@ -303,7 +332,22 @@ def memory_writer_node(state: PipelineState) -> PipelineState:
 def route_after_critic(state: PipelineState) -> str:
     if state["verdict"] == "approve":
         return "write_memory"
-    if state["retry_count"] >= MAX_RETRIES:
+    
+    # Early-exit: if critic says the chunks lack sufficient info, retrying synthesizer cannot help
+    critic_reason = (state.get("critic_reason") or "").lower()
+    insufficient_signals = [
+        "insufficient data",
+        "not enough information",
+        "chunks don't contain",
+        "chunks do not contain",
+        "missing data",
+        "no information provided",
+    ]
+    if any(sig in critic_reason for sig in insufficient_signals):
+        print(f"[Pipeline Router] Early-exit: critic identified insufficient data in chunks.")
+        return "unresolved"
+
+    if state.get("retry_count", 0) >= MAX_RETRIES:
         return "unresolved"
     return "retry"
 

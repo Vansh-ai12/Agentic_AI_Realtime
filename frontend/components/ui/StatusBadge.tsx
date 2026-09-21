@@ -21,12 +21,32 @@ export function StatusBadge({ status, className = "", size = "sm" }: StatusBadge
     );
   }
 
-  if (normalized === "unresolved" || normalized === "rejected" || normalized === "failed" || normalized === "error") {
+  if (normalized === "unresolved" || normalized === "rejected" || normalized === "failed" || normalized === "error" || normalized === "fail") {
     return (
       <span
         className={`inline-flex items-center rounded-full font-mono font-bold uppercase tracking-wider bg-rose-500/15 text-rose-300 border border-rose-500/30 ${sizeClasses} ${className}`}
       >
-        unresolved
+        {normalized === "fail" ? "fail" : "unresolved"}
+      </span>
+    );
+  }
+
+  if (normalized === "pass" || normalized === "passed") {
+    return (
+      <span
+        className={`inline-flex items-center rounded-full font-mono font-bold uppercase tracking-wider bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 ${sizeClasses} ${className}`}
+      >
+        pass
+      </span>
+    );
+  }
+
+  if (normalized === "blocked") {
+    return (
+      <span
+        className={`inline-flex items-center rounded-full font-mono font-bold uppercase tracking-wider bg-amber-500/15 text-amber-300 border border-amber-500/30 ${sizeClasses} ${className}`}
+      >
+        blocked
       </span>
     );
   }

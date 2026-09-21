@@ -4,3 +4,4 @@ export { PageHeader } from "./PageHeader";
 export { Card, SectionHeader } from "./Card";
 export { Button } from "./Button";
 export { LoadingState, ErrorState, EmptyState } from "./States";
+export { GradientBanner } from "./GradientBanner";

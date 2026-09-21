@@ -19,7 +19,7 @@ def get_run_trace(run_id: str):
 
 
 @router.get("/runs")
-def list_recent_runs(limit: int = 20):
+def list_recent_runs(limit: int = 100):
     """So the frontend can show a list of runs to pick from, not just a raw run_id."""
     runs = supabase.table("agent_runs").select("id, query, status, total_attempts, created_at") \
         .order("created_at", desc=True).limit(limit).execute()

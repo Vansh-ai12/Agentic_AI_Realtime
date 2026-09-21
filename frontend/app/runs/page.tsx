@@ -136,6 +136,7 @@ export default function RunsPage() {
           <ErrorState
             title="Failed to Load Runs"
             error={`Could not query ${API_BASE}/runs: ${error}`}
+            onRetry={() => window.location.reload()}
           />
         )}
 

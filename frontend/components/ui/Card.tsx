@@ -16,7 +16,7 @@ export function Card({ children, className = "", variant = "standard" }: CardPro
 
   return (
     <div
-      className={`border rounded-xl overflow-hidden shadow-sm backdrop-blur-sm transition-all duration-150 ${variantStyles} ${className}`}
+      className={`border rounded-xl overflow-hidden shadow-sm backdrop-blur-sm transition-all duration-150 hover-lift ${variantStyles} ${className}`}
     >
       {children}
     </div>

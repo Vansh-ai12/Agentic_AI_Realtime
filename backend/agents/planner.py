@@ -1,15 +1,7 @@
-import os
 import json
-from groq import Groq
-from dotenv import load_dotenv
-from pathlib import Path
+from utils.groq_client import groq_chat_completion
 
-env_path = Path(__file__).resolve().parents[1] / ".env.local"
-load_dotenv(dotenv_path=env_path)
-
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-
-PLANNER_MODEL = "openai/gpt-oss-20b"
+PLANNER_MODEL = "qwen/qwen3.8-27b" 
 
 PLANNER_SYSTEM_PROMPT = """You are a query planning agent. Given a user's question, break it down into 1-4 focused sub-questions that, together, would let a retrieval system find all the information needed to answer the original question.
 
@@ -20,7 +12,7 @@ Respond ONLY with valid JSON in this exact format, no other text:
 """
 
 def plan_query(user_query: str, run_id: str = None, attempt_id: str = None) -> dict:
-    response = client.chat.completions.create(
+    response = groq_chat_completion(
         model=PLANNER_MODEL,
         messages=[
             {"role": "system", "content": PLANNER_SYSTEM_PROMPT},

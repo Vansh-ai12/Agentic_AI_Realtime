@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routes import trace
+from routes import trace, eval as eval_routes, auth
 
 app = FastAPI()
 
@@ -16,6 +16,8 @@ app.add_middleware(
 )
 
 app.include_router(trace.router, prefix="/api")
+app.include_router(eval_routes.router, prefix="/api")
+app.include_router(auth.router, prefix="/api")
 
 
 @app.get("/")

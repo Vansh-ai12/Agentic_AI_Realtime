@@ -63,9 +63,20 @@ export default function DashboardHome() {
         title="Agentic RAG Telemetry Control Center"
         description="Live DAG visualization, granular node-by-node execution logs, and token compression analytics for multi-agent self-correcting RAG."
         actions={
-          <Button href="/runs" variant="primary" size="md">
-            Browse All Runs &rarr;
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button href="/connect/gmail" variant="secondary" size="md">
+              Connect Gmail
+            </Button>
+            <Button href="/connect/notion" variant="secondary" size="md">
+              Connect Notion
+            </Button>
+            <Button href="/eval" variant="secondary" size="md">
+              Eval Dashboard
+            </Button>
+            <Button href="/runs" variant="primary" size="md">
+              Browse All Runs &rarr;
+            </Button>
+          </div>
         }
       />
 
